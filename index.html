@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>API de Gestion</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial; background: #1a1a2e; color: #fff; min-height: 100vh; padding: 20px; }
+        .container { max-width: 700px; margin: auto; }
+        h1 { text-align: center; color: #00d4ff; margin-bottom: 20px; }
+        .card { background: #16213e; padding: 20px; border-radius: 10px; margin-bottom: 15px; }
+        input, select { width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 5px; border: 1px solid #333; background: #0f0f23; color: #fff; }
+        button { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; margin-right: 10px; }
+        .btn-primary { background: #00d4ff; color: #000; }
+        .btn-success { background: #28a745; color: #fff; }
+        .btn-danger { background: #dc3545; color: #fff; }
+        .msg { padding: 10px; border-radius: 5px; margin-top: 10px; }
+        .error { background: #5c2626; color: #ff6b6b; }
+        .success { background: #265c26; color: #6bff6b; }
+        .item { background: #0f0f23; padding: 10px; margin-bottom: 8px; border-radius: 5px; display: flex; justify-content: space-between; align-items: center; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #333; }
+        th { color: #00d4ff; }
+        .hidden { display: none; }
+        .menu { display: flex; gap: 10px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>API de Gestion</h1>
+        
+        <div class="menu">
+            <button class="btn-primary" onclick="showTab('auth')">🔐 Auth</button>
+            <button class="btn-success" onclick="showTab('proyectos')" id="btn-proy" disabled>📁 Proyectos</button>
+            <button class="btn-success" onclick="showTab('tareas')" id="btn-tarea" disabled>✅ Tareas</button>
+            <button class="btn-danger" onclick="logout()" id="btn-logout" disabled>🚪 Logout</button>
+        </div>
+
+        <div id="auth" class="card">
+            <h2>🔐 Login / Registro</h2>
+            <input type="email" id="email" placeholder="Email" value="test@test.com">
+            <input type="text" id="nombre" placeholder="Nombre (para registro)">
+            <input type="password" id="password" placeholder="Contrasena" value="123456">
+            <button class="btn-success" onclick="login()">Login</button>
+            <button class="btn-primary" onclick="registro()">Registro</button>
+            <div id="auth-msg"></div>
+        </div>
+
+        <div id="proyectos" class="card hidden">
+            <h2>📁 Proyectos</h2>
+            <input type="text" id="proy-nombre" placeholder="Nombre del proyecto">
+            <input type="text" id="proy-desc" placeholder="Descripcion">
+            <button class="btn-success" onclick="crearProy()">Crear</button>
+            <button class="btn-primary" onclick="cargarProy()">Recargar</button>
+            <div id="proy-lista"></div>
+        </div>
+
+        <div id="tareas" class="card hidden">
+            <h2>✅ Tareas</h2>
+            <select id="tarea-proy"><option value="">Selecciona proyecto</option></select>
+            <input type="text" id="tarea-titulo" placeholder="Titulo de la tarea">
+            <select id="tarea-prioridad">
+                <option value="baja">Baja</option>
+                <option value="media">Media</option>
+                <option value="alta">Alta</option>
+                <option value="urgente">Urgente</option>
+            </select>
+            <button class="btn-success" onclick="crearTarea()">Crear</button>
+            <button class="btn-primary" onclick="cargarTareas()">Recargar</button>
+            <div id="tarea-lista"></div>
+        </div>
+    </div>
+
+    <script>
+        const API = 'http://localhost:8000';
+        let token = localStorage.getItem('token') || '';
+        let proySeleccionado = '';
+
+        function showTab(tab) {
+            ['auth', 'proyectos', 'tareas'].forEach(id => document.getElementById(id).classList.add('hidden'));
+            document.getElementById(tab).classList.remove('hidden');
+            if (tab === 'proyectos') cargarProy();
+            if (tab === 'tareas') { cargarProy(); cargarTareas(); }
+        }
+
+        async function api(endpoint, method, body) {
+            const h = { 'Content-Type': 'application/json' };
+            if (token) h['Authorization'] = 'Bearer ' + token;
+            const res = await fetch(API + endpoint, { method, headers: h, body: body ? JSON.stringify(body) : undefined });
+            return { ok: res.ok, data: await res.json() };
+        }
+
+        function msg(el, text, type) {
+            document.getElementById(el).innerHTML = `<div class="msg ${type}">${text}</div>`;
+        }
+
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const r = await api('/api/login', 'POST', { email, password });
+            if (r.ok) {
+                token = r.data.token;
+                localStorage.setItem('token', token);
+                document.getElementById('btn-proy').disabled = false;
+                document.getElementById('btn-tarea').disabled = false;
+                document.getElementById('btn-logout').disabled = false;
+                msg('auth-msg', 'Login exitoso!', 'success');
+                showTab('proyectos');
+            } else {
+                msg('auth-msg', r.data.detail || 'Error', 'error');
+            }
+        }
+
+        async function registro() {
+            const email = document.getElementById('email').value;
+            const nombre = document.getElementById('nombre').value;
+            const password = document.getElementById('password').value;
+            const r = await api('/api/registro', 'POST', { email, nombre, password });
+            if (r.ok) {
+                token = r.data.token;
+                localStorage.setItem('token', token);
+                document.getElementById('btn-proy').disabled = false;
+                document.getElementById('btn-tarea').disabled = false;
+                document.getElementById('btn-logout').disabled = false;
+                msg('auth-msg', 'Registro exitoso!', 'success');
+                showTab('proyectos');
+            } else {
+                msg('auth-msg', r.data.detail || 'Error', 'error');
+            }
+        }
+
+        function logout() {
+            token = '';
+            localStorage.removeItem('token');
+            document.getElementById('btn-proy').disabled = true;
+            document.getElementById('btn-tarea').disabled = true;
+            document.getElementById('btn-logout').disabled = true;
+            showTab('auth');
+        }
+
+        async function crearProy() {
+            const nombre = document.getElementById('proy-nombre').value;
+            const desc = document.getElementById('proy-desc').value;
+            const r = await api('/api/proyectos', 'POST', { nombre, descripcion: desc });
+            if (r.ok) {
+                document.getElementById('proy-nombre').value = '';
+                document.getElementById('proy-desc').value = '';
+                cargarProy();
+            } else {
+                alert('Error: ' + (r.data.detail || 'No se pudo crear'));
+            }
+        }
+
+        async function cargarProy() {
+            const r = await api('/api/proyectos', 'GET');
+            const select = document.getElementById('tarea-proy');
+            if (r.ok) {
+                const list = document.getElementById('proy-lista');
+                if (r.data.length === 0) {
+                    list.innerHTML = '<p style="color:#666">No hay proyectos</p>';
+                    select.innerHTML = '<option value="">No hay proyectos</option>';
+                } else {
+                    list.innerHTML = '<table><tr><th>Nombre</th><th>Descripcion</th></tr>' + 
+                        r.data.map(p => `<tr><td>${p.nombre}</td><td>${p.descripcion || '-'}</td></tr>`).join('') + '</table>';
+                    select.innerHTML = '<option value="">Selecciona</option>' + 
+                        r.data.map(p => `<option value="${p.id}">${p.nombre}</option>`).join('');
+                }
+            }
+        }
+
+        async function crearTarea() {
+            const proyecto_id = document.getElementById('tarea-proy').value;
+            const titulo = document.getElementById('tarea-titulo').value;
+            const prioridad = document.getElementById('tarea-prioridad').value;
+            if (!proyecto_id || !titulo) return alert('Completa los campos');
+            const r = await api('/api/tareas', 'POST', { titulo, prioridad, proyecto_id });
+            if (r.ok) {
+                document.getElementById('tarea-titulo').value = '';
+                cargarTareas();
+            }
+        }
+
+        async function cargarTareas() {
+            const proyecto_id = document.getElementById('tarea-proy').value;
+            const url = proyecto_id ? `/api/tareas?proyecto_id=${proyecto_id}` : '/api/tareas';
+            const r = await api(url, 'GET');
+            const list = document.getElementById('tarea-lista');
+            if (r.ok) {
+                if (r.data.length === 0) {
+                    list.innerHTML = '<p style="color:#666">No hay tareas</p>';
+                } else {
+                    const color = { pendiente: '#ffc107', completada: '#28a745' };
+                    list.innerHTML = '<table><tr><th>Titulo</th><th>Estado</th><th>Accion</th></tr>' +
+                        r.data.map(t => `<tr>
+                            <td>${t.titulo}</td>
+                            <td style="color:${color[t.estado] || '#fff'}">${t.estado}</td>
+                            <td>
+                                <button onclick="completar('${t.id}')" class="btn-success" style="padding:5px 10px">✓</button>
+                                <button onclick="eliminar('${t.id}')" class="btn-danger" style="padding:5px 10px">X</button>
+                            </td>
+                        </tr>`).join('') + '</table>';
+                }
+            }
+        }
+
+        async function completar(id) {
+            await api('/api/tareas/' + id, 'PATCH', { estado: 'completada' });
+            cargarTareas();
+        }
+
+        async function eliminar(id) {
+            if (confirm('Eliminar?')) {
+                await api('/api/tareas/' + id, 'DELETE');
+                cargarTareas();
+            }
+        }
+
+        // Init
+        if (token) {
+            document.getElementById('btn-proy').disabled = false;
+            document.getElementById('btn-tarea').disabled = false;
+            document.getElementById('btn-logout').disabled = false;
+            showTab('proyectos');
+        }
+    </script>
+</body>
+</html>
